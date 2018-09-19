@@ -1,9 +1,13 @@
 extern crate amethyst;
 
 use amethyst::assets::{AssetStorage, Loader};
+use amethyst::core::bundle::{Result, SystemBundle};
 use amethyst::core::cgmath::{Matrix4, Vector3};
+use amethyst::core::timing::Time;
 use amethyst::core::transform::{GlobalTransform, Transform, TransformBundle};
-use amethyst::ecs::prelude::{Component, DenseVecStorage};
+use amethyst::ecs::prelude::{
+    Component, DenseVecStorage, DispatcherBuilder, Join, Read, ReadStorage, System, WriteStorage,
+};
 use amethyst::input::{is_close_requested, is_key_down};
 use amethyst::prelude::*;
 use amethyst::renderer::{
@@ -28,23 +32,27 @@ const BOTTOM_IMAGE_WIDTH: f32 = 1100.0;
 const BOTTOM_IMAGE_HEIGHT: f32 = 16.0;
 
 #[derive(PartialEq, Eq)]
-enum BGPosition {
+pub enum BGPosition {
     Middle,
     Bottom,
 }
 
-struct Background {
+pub struct Background {
     pub position: BGPosition,
     pub width: f32,
     pub height: f32,
+    pub speed: f32,
+    pub loop_position: f32,
 }
 
 impl Background {
-    fn new(pos: BGPosition, w: f32, h: f32) -> Background {
+    fn new(pos: BGPosition, w: f32, h: f32, s: f32, lp: f32) -> Background {
         Background {
             position: pos,
             width: w,
             height: h,
+            speed: s,
+            loop_position: lp,
         }
     }
 }
@@ -60,14 +68,12 @@ fn initiailize_camera(world: &mut World) {
         .create_entity()
         .with(Camera::from(Projection::orthographic(
             0.0,
-            ARENA_WIDTH * 4.0,
-            ARENA_HEIGHT * 4.0,
+            ARENA_WIDTH,
+            ARENA_HEIGHT,
             0.0,
-        )))
-        .with(GlobalTransform(
+        ))).with(GlobalTransform(
             Matrix4::from_translation(Vector3::new(0.0, 0.0, 1.0)).into(),
-        ))
-        .build();
+        )).build();
 }
 
 // 이미지 로딩
@@ -96,7 +102,7 @@ fn initialize_background(
     // Position 맞추기
     let y = BACKGROUND_IMAGE_HEIGHT / 2.0;
 
-    center_transform.translation = Vector3::new(BACKGROUND_IMAGE_WIDTH / 2.0 + 200.0, y, 0.0);
+    center_transform.translation = Vector3::new(BACKGROUND_IMAGE_WIDTH / 2.0, y, 0.0);
     bottom_transform.translation =
         Vector3::new(BOTTOM_IMAGE_WIDTH / 2.0, BOTTOM_IMAGE_HEIGHT / 2.0, 0.0);
 
@@ -107,14 +113,14 @@ fn initialize_background(
             &bg_sprite_info,
             bg_sprite,
             (BACKGROUND_IMAGE_WIDTH, BACKGROUND_IMAGE_HEIGHT),
-        )
-        .expect("Error on bgsprite")
+        ).expect("Error on bgsprite")
         .with(Background::new(
             BGPosition::Middle,
             BACKGROUND_IMAGE_WIDTH,
             BACKGROUND_IMAGE_HEIGHT,
-        ))
-        .with(GlobalTransform::default())
+            64.0,
+            412.0,
+        )).with(GlobalTransform::default())
         .with(center_transform)
         .build();
 
@@ -124,14 +130,14 @@ fn initialize_background(
             &bottom_sprite_info,
             bottom_sprite,
             (BOTTOM_IMAGE_WIDTH, BOTTOM_IMAGE_HEIGHT),
-        )
-        .expect("Error on bottom sprite")
+        ).expect("Error on bottom sprite")
         .with(Background::new(
             BGPosition::Bottom,
             BOTTOM_IMAGE_WIDTH,
             BOTTOM_IMAGE_HEIGHT,
-        ))
-        .with(GlobalTransform::default())
+            128.0,
+            200.0,
+        )).with(GlobalTransform::default())
         .with(bottom_transform)
         .build();
 }
@@ -182,7 +188,37 @@ impl<'a, 'b> State<GameData<'a, 'b>> for Example {
     }
 }
 
-fn main() -> Result<(), amethyst::Error> {
+pub struct MoveBackgroundSystem;
+
+impl<'s> System<'s> for MoveBackgroundSystem {
+    type SystemData = (
+        ReadStorage<'s, Background>,
+        WriteStorage<'s, Transform>,
+        Read<'s, Time>,
+    );
+
+    fn run(&mut self, (bgs, mut locals, time): Self::SystemData) {
+        // Move every background with its speed and turning back when it's loop position
+        for (bg, local) in (&bgs, &mut locals).join() {
+            local.translation[0] -= bg.speed * time.delta_seconds();
+
+            if local.translation[0] <= 0.0 {
+                local.translation[0] = bg.loop_position;
+            }
+        }
+    }
+}
+
+pub struct GlobalBundle;
+
+impl<'a, 'b> SystemBundle<'a, 'b> for GlobalBundle {
+    fn build(self, builder: &mut DispatcherBuilder<'a, 'b>) -> Result<()> {
+        builder.add(MoveBackgroundSystem, "move_background_system", &[]);
+        Ok(())
+    }
+}
+
+fn main() -> amethyst::Result<()> {
     amethyst::start_logger(Default::default());
 
     let path = format!(
@@ -198,8 +234,9 @@ fn main() -> Result<(), amethyst::Error> {
     );
 
     let game_data = GameDataBuilder::default()
+        .with_bundle(GlobalBundle)?
         .with_bundle(RenderBundle::new(pipe, Some(config)))?
-        .with_bundle(TransformBundle::new())?;
+        .with_bundle(TransformBundle::new().with_dep(&["move_background_system"]))?;
     let mut game = Application::build("./", Example)?.build(game_data)?;
     game.run();
     Ok(())
