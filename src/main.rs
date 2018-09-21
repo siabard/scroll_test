@@ -236,7 +236,7 @@ fn main() -> amethyst::Result<()> {
     let game_data = GameDataBuilder::default()
         .with_bundle(GlobalBundle)?
         .with_bundle(RenderBundle::new(pipe, Some(config)))?
-        .with_bundle(TransformBundle::new().with_dep(&["move_background_system"]))?;
+        .with_bundle(TransformBundle::new())?;
     let mut game = Application::build("./", Example)?.build(game_data)?;
     game.run();
     Ok(())
