@@ -1,7 +1,7 @@
 [package]
-name = "scroll_state"
+name = "scroll_test"
 version = "0.1.0"
-authors = []
+authors = ["Yeonho Jang <siabard@gmail.com>"]
 
 [dependencies]
 amethyst = {version = "0.9.0"}

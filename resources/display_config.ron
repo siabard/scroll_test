@@ -1,5 +1,5 @@
 (
-  title: "scroll_state",
+  title: "Scroll Test (Fifty Bird)",
   dimensions: Some((512, 288)),
   max_dimensions: None,
   min_dimensions: None,
