@@ -8,7 +8,7 @@ use amethyst::core::transform::{GlobalTransform, Transform, TransformBundle};
 use amethyst::ecs::prelude::{
     Component, DenseVecStorage, DispatcherBuilder, Join, Read, ReadStorage, System, WriteStorage,
 };
-use amethyst::input::{is_close_requested, is_key_down};
+use amethyst::input::{is_close_requested, is_key_down, InputBundle, InputHandler};
 use amethyst::prelude::*;
 use amethyst::renderer::{
     Camera, ColorMask, DepthMode, DisplayConfig, DrawSprite, MaterialTextureSet, Pipeline,
@@ -349,6 +349,25 @@ impl<'s> System<'s> for MoveBackgroundSystem {
     }
 }
 
+pub struct BirdSystem;
+impl<'s> System<'s> for BirdSystem {
+    type SystemData = (
+        WriteStorage<'s, Transform>,
+        ReadStorage<'s, Bird>,
+        Read<'s, InputHandler<String, String>>,
+    );
+
+    fn run(&mut self, (mut transforms, birds, input): Self::SystemData) {
+        for (bird, transform) in (&birds, &mut transforms).join() {
+            if let Some(fired) = input.action_is_down("fire") {
+                if fired {
+                    println!("fire emitted");
+                }
+            }
+        }
+    }
+}
+
 pub struct GlobalBundle;
 
 impl<'a, 'b> SystemBundle<'a, 'b> for GlobalBundle {
@@ -367,6 +386,10 @@ fn main() -> amethyst::Result<()> {
     );
     let config = DisplayConfig::load(&path);
 
+    let binding_path = format!("{}/resources/bindings.ron", env!("CARGO_MANIFEST_DIR"));
+    let input_bundle =
+        InputBundle::<String, String>::new().with_bindings_from_file(binding_path)?;
+
     let pipe = Pipeline::build().with_stage(
         Stage::with_backbuffer()
             .clear_target([0.0, 0.0, 0.0, 1.0], 1.0)
@@ -384,7 +407,8 @@ fn main() -> amethyst::Result<()> {
             RenderBundle::new(pipe, Some(config))
                 .with_sprite_sheet_processor()
                 .with_sprite_visibility_sorting(&["transform_system"]),
-        )?;
+        )?.with_bundle(input_bundle)?
+        .with(BirdSystem, "bird_system", &["input_system"]);
     let mut game = Application::build("./", Example)?.build(game_data)?;
     game.run();
     Ok(())
