@@ -48,15 +48,17 @@ pub struct Bird {
     pub height: f32,
     pub top: f32,
     pub left: f32,
+    pub jump: f32,
 }
 
 impl Bird {
-    fn new(w: f32, h: f32, t: f32, l: f32) -> Bird {
+    fn new(w: f32, h: f32, t: f32, l: f32, j:f32) -> Bird {
         Bird {
             width: w,
             height: h,
             top: t,
             left: l,
+            jump: j,
         }
     }
 }
@@ -166,7 +168,7 @@ fn initialize_bird(world: &mut World, bird_sprite: TextureHandle) {
     world
         .create_entity()
         .with(sprite_render)
-        .with(Bird::new(BIRD_IMAGE_WIDTH, BIRD_IMAGE_HEIGHT, y, x))
+        .with(Bird::new(BIRD_IMAGE_WIDTH, BIRD_IMAGE_HEIGHT, y, x, 0.0))
         .with(GlobalTransform::default())
         .with(center_transform)
         .with(Transparent)
@@ -353,17 +355,25 @@ pub struct BirdSystem;
 impl<'s> System<'s> for BirdSystem {
     type SystemData = (
         WriteStorage<'s, Transform>,
-        ReadStorage<'s, Bird>,
+        WriteStorage<'s, Bird>,
         Read<'s, InputHandler<String, String>>,
+        Read<'s, Time>,
     );
 
-    fn run(&mut self, (mut transforms, birds, input): Self::SystemData) {
-        for (bird, transform) in (&birds, &mut transforms).join() {
+    fn run(&mut self, (mut transforms, mut birds, input, time): Self::SystemData) {
+        for (bird, transform) in (&mut birds, &mut transforms).join() {
             if let Some(fired) = input.action_is_down("fire") {
                 if fired {
                     println!("fire emitted");
+                    // y 위치를 올려줘야한다. -> y_delta 값을 증가시켜줘야함.
+                    bird.jump = 4.5;
                 }
             }
+            // 떨어져라.. 새야..
+            bird.jump -= 9.5 * time.delta_seconds();
+            println!("bird.jump is : {}", bird.jump);
+            println!("transform.translation[1] is : {}", transform.translation[1]);
+            transform.translation[1] += bird.jump;
         }
     }
 }
